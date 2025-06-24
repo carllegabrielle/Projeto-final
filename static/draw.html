@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Desenhe o Dígito</title>
+<style>
+ body{font-family:Arial,sans-serif;text-align:center;margin:40px;}
+ #canvas-box{display:inline-block;border:3px solid #888;border-radius:8px;background:#fff;}
+ #draw-canvas{background:#fff;touch-action:none;}
+ #draw-result{margin-top:20px;font-size:1.2em;}
+ #clear-btn,#send-btn{margin:10px 8px;padding:8px 18px;font-size:1em;}
+</style></head>
+<body>
+    <h1>Desenhe o dígito</h1>
+    <div id="canvas-box">
+        <canvas id="draw-canvas" width="256" height="256"></canvas>
+    </div><br/>
+    <button id="clear-btn">Limpar</button>
+    <button id="send-btn">Enviar</button>
+    <div id="draw-result"></div>
+<script>
+const canvas = document.getElementById('draw-canvas');
+const ctx = canvas.getContext('2d');
+let drawing = false, lastX=0, lastY=0;
+ctx.lineWidth = 18;
+ctx.lineCap = 'round';
+ctx.strokeStyle = '#000';
+canvas.addEventListener('mousedown', e => {drawing=true;[lastX,lastY]=[e.offsetX,e.offsetY];});
+canvas.addEventListener('mousemove', e => {if(drawing){ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();[lastX,lastY]=[e.offsetX,e.offsetY];}});
+canvas.addEventListener('mouseup', ()=>drawing=false);
+canvas.addEventListener('mouseleave', ()=>drawing=false);
+// Touch events
+canvas.addEventListener('touchstart', e => {e.preventDefault();drawing=true;const r=canvas.getBoundingClientRect();const t=e.touches[0];[lastX,lastY]=[t.clientX-r.left,t.clientY-r.top];});
+canvas.addEventListener('touchmove', e => {e.preventDefault();if(drawing){const r=canvas.getBoundingClientRect();const t=e.touches[0];ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(t.clientX-r.left,t.clientY-r.top);ctx.stroke();[lastX,lastY]=[t.clientX-r.left,t.clientY-r.top];}});
+canvas.addEventListener('touchend', ()=>drawing=false);
+document.getElementById('clear-btn').onclick = ()=>{ctx.clearRect(0,0,canvas.width,canvas.height);document.getElementById('draw-result').textContent='';};
+document.getElementById('send-btn').onclick = async ()=>{
+    const res = document.getElementById('draw-result');
+    res.textContent = 'Classificando...';
+    // Inverte as cores do canvas antes de enviar
+    const temp = document.createElement('canvas');
+    temp.width = canvas.width;
+    temp.height = canvas.height;
+    const tctx = temp.getContext('2d');
+    tctx.drawImage(canvas, 0, 0);
+    const imgData = tctx.getImageData(0, 0, temp.width, temp.height);
+    for(let i=0; i<imgData.data.length; i+=4){
+        // Inverte R, G, B
+        imgData.data[i] = 255 - imgData.data[i];
+        imgData.data[i+1] = 255 - imgData.data[i+1];
+        imgData.data[i+2] = 255 - imgData.data[i+2];
+        // Alpha permanece igual
+    }
+    tctx.putImageData(imgData, 0, 0);
+    temp.toBlob(async function(blob){
+        const f = new FormData();
+        f.append('file', blob, 'drawn.png');
+        try{
+            let r=await fetch('/predict',{method:'POST',body:f}),
+                j=await r.json();
+            if(r.ok) {
+                let html = `Dígito: <strong>${j.digit}</strong><br/>Confiança: ${(j.confidence*100).toFixed(1)}%`;
+                if(j.confidence < 0.6) {
+                    html += `<br/><span style=\"color:#b00;font-size:0.95em\">eu juraria pela minha mãe mortinha que o número é esse? Não! Mas quem sabe...</span>`;
+                }
+                res.innerHTML = html;
+            }
+            else res.textContent=j.detail;
+        }catch(err){res.textContent='Erro na requisição: '+err.message}
+    }, 'image/png');
+};
+</script>
+</body></html>

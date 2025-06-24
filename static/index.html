@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Classificador</title>
+<style>
+ body{font-family:Arial,sans-serif;text-align:center;margin:40px;}
+ #drop-zone{border:3px dashed #888;padding:40px;border-radius:8px;color:#555;cursor:pointer;}
+ #drop-zone.hover{border-color:#333;color:#111;}
+ #result{margin-top:20px;font-size:1.2em;}
+</style></head>
+<body>
+    <h1>Arraste e Solte sua Imagem</h1>
+    <div id="drop-zone">Arraste a imagem aqui ou clique para selecionar</div>
+    <input type="file" id="file-input" accept="image/*" style="display:none"/>
+    <div id="result"></div>
+<script>
+    const dz = document.getElementById('drop-zone'),
+                fi = document.getElementById('file-input'),
+                res = document.getElementById('result');
+    dz.onclick = ()=> fi.click();
+    dz.ondragover = e=>{e.preventDefault();dz.classList.add('hover')};
+    dz.ondragleave = ()=>dz.classList.remove('hover');
+    dz.ondrop = e=>{e.preventDefault();dz.classList.remove('hover');handle(e.dataTransfer.files[0])};
+    fi.onchange = ()=>handle(fi.files[0]);
+    async function handle(file){
+        if(!file||!file.type.startsWith('image/')){res.textContent='Selecione uma imagem valida.';return;}
+        res.textContent='Classificando...';
+        const f=new FormData();f.append('file',file);
+        try{
+            let r=await fetch('/predict',{method:'POST',body:f}),
+                    j=await r.json();
+            if(r.ok) {
+                let html = `Dígito: <strong>${j.digit}</strong><br/>Confiança: ${(j.confidence*100).toFixed(1)}%`;
+                if(j.confidence < 0.6) {
+                    html += `<br/><span style=\"color:#b00;font-size:0.95em\">eu juraria pela minha mãe mortinha que o número é esse? Não! Mas quem sabe...</span>`;
+                }
+                res.innerHTML = html;
+            }
+            else res.textContent=j.detail;
+        }catch(err){res.textContent='Erro na requisição: '+err.message}
+    }
+</script>
+</body></html>
